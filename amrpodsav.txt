@@ -1,10 +1,8 @@
 (function () {
 	"use strict";
 	jQuery.sap.require("sap.ui.comp.smartfield.SmartField");
-	jQuery.sap.require("sap.suite.ui.generic.template.js.StableIdHelper");
-	jQuery.sap.declare("sap.suite.ui.generic.template.js.AnnotationHelper");
 
-	var Log = sap.ui.require("sap/base/Log");
+	jQuery.sap.declare("sap.suite.ui.generic.template.js.AnnotationHelper");
 	
 	function fnExtensionLazyLoadEnabled(sExtensionPointId, oManifestExtend) {
 		var oExtension = oManifestExtend[sExtensionPointId];
@@ -89,7 +87,7 @@
 					} else if (oHidden["com.sap.vocabularies.UI.v1.Hidden"].Bool === "false") {
 						return true; // <Annotation Term="UI.Hidden" Bool="false"/>
 					} else {
-						Log.error(oHidden["com.sap.vocabularies.UI.v1.Hidden"].Bool + " is not a boolean value" );
+						jQuery.sap.log.error(oHidden["com.sap.vocabularies.UI.v1.Hidden"].Bool + " is not a boolean value" );
 						return true; // <Annotation Term="UI.Hidden" Bool="Value other than true or false"/>
 					}
 				} else {
@@ -230,17 +228,19 @@
 
 		// returns the enablement expression for Delete buttons on Object Page toolbars
 		buildDeleteButtonEnablementExpression: function (mFacet, oTabItem) {
-			var sButtonId = sap.suite.ui.generic.template.js.StableIdHelper.getStableId({
-				type: "ObjectPageAction",
-				subType: "Delete",
-				sFacet: sap.suite.ui.generic.template.js.AnnotationHelper.getStableIdPartFromFacet(mFacet)
-			});
+			var sButtonId = sap.suite.ui.generic.template.js.AnnotationHelper.getStableIdPartFromFacet(mFacet) + "::deleteEntry";
+			var sSuffix = sap.suite.ui.generic.template.js.AnnotationHelper.getSuffixFromIconTabFilterKey(oTabItem);
+			if (sSuffix) {
+				sButtonId = sButtonId.concat(sSuffix);
+			}
 			return "{= !!${_templPriv>/generic/controlProperties/" + sButtonId + "/enabled}}";
 		},
 
 		tabItemHasPresentationVariant: function(oEntityType, sVariantAnnotationPath) {
 			var oVariant = oEntityType[sVariantAnnotationPath];
-			return !!(oVariant && (oVariant.PresentationVariant || oVariant.Visualizations || oVariant.SortOrder));
+			if (oVariant.PresentationVariant || oVariant.Visualizations || oVariant.SortOrder) {
+				return true;
+			}
 		},
 
 		getPresentationVariant: function(oVariant, oEntityType) {
@@ -451,7 +451,7 @@
 					mFunctionImport = oMetaModel.getODataFunctionImport(sAction);
 					 // if RecordType is UI.DataFieldForAction and if sap:action-for is defined then return binding expression
 					if (!mFunctionImport) {
-						Log.error("The function import " + sAction + " is not defined in the metadata. Buttons that call this function import will not behave as expected.");
+						jQuery.sap.log.error("The function import " + sAction + " is not defined in the metadata. Buttons that call this function import will not behave as expected.");
 						return false;
 					} else if (mFunctionImport["sap:action-for"] && mFunctionImport["sap:action-for"] !== "" && mFunctionImport["sap:action-for"] !== " ") {
 						return "{= !!${_templPriv>/generic/controlProperties/" + sButtonId + "/enabled}}";
@@ -551,7 +551,7 @@
 					if (mODataProperty && mODataProperty["sap:aggregation-role"] === "dimension") {
 						aApplicablePath.push(sApplicablePath);
 					} else {
-						Log.error("AnnotationHelper.js - method getApplicablePathForChartToolbarActions: the applicable-path " + sApplicablePath +
+						jQuery.sap.log.error("AnnotationHelper.js - method getApplicablePathForChartToolbarActions: the applicable-path " + sApplicablePath +
 							" is either pointing to an entity type property which doesn't exist or does not have 'sap:aggregation-role' set to to 'dimension'.");
 					}
 				}
@@ -650,33 +650,20 @@
 			return sText;
 		},
 
-		getEditActionButtonVisibility: function (oInterface, mRestrictions, oEntitySet, bParameterEdit, bIsDraftEnabled) {
+		getEditActionButtonVisibility: function (oInterface, mRestrictions, sEntityType, bParameterEdit) {
 			//Standard behaviour is that EDIT Button visbility is bound to ui>/editable
 			//if an external EDIT has been specified in the manifest with bParameterEdit this can also be restricted by an applicable path
 			var	oMetaModel = oInterface.getInterface(0).getModel();
-			var sEntityType = oEntitySet.entityType;
 
 			if (sap.suite.ui.generic.template.js.AnnotationHelper._areUpdateRestrictionsValid(oMetaModel, sEntityType, mRestrictions)) {
 				var sUIEditableExpression = "!${ui>/editable}";
-				var sNotOwnDraft = "!${DraftAdministrativeData/DraftIsCreatedByMe}";
-
 				if (mRestrictions) {
 					if (mRestrictions.Updatable.Path) {
 						sap.suite.ui.generic.template.js.AnnotationHelper._actionControlExpand(oInterface, mRestrictions.Updatable.Path, sEntityType);
-						if (bIsDraftEnabled) {
-							// Not to show 'Edit' button when there is an own draft. Instead show 'Continue Editing'
-							oAnnotationHelper.formatWithExpandSimple(oInterface, {Path : "DraftAdministrativeData/DraftIsCreatedByMe"}, oEntitySet); // This is to add navigation parameters to the request.
-							return "{= ${" + mRestrictions.Updatable.Path + "} && " + sUIEditableExpression + " && " + sNotOwnDraft + "}";
-						} else {
-							return "{= ${" + mRestrictions.Updatable.Path + "} ? " + sUIEditableExpression + " : false}";
-						}
+						return "{= ${" + mRestrictions.Updatable.Path + "} ? " + sUIEditableExpression + " : false}";
 					} else if (mRestrictions.Updatable.Bool === "false" && !bParameterEdit) {
 						return false;
 					}
-				} else if (bIsDraftEnabled) {
-					// Not to show 'Edit' button when there is an own draft. Instead show 'Continue Editing'
-					oAnnotationHelper.formatWithExpandSimple(oInterface, {Path : "DraftAdministrativeData/DraftIsCreatedByMe"}, oEntitySet);// This is to add navigation parameters to the request.
-					return "{= (" + sNotOwnDraft + " && " + sUIEditableExpression + ") }";
 				}
 				return "{=" + sUIEditableExpression + "}";
 			} else {
@@ -2074,7 +2061,7 @@
 		},
 		replaceSpecialCharsInId: function (sId) {
 			if (sId.indexOf(" ") >= 0) {
-				Log.error("Annotation Helper: Spaces are not allowed in ID parts. Please check the annotations, probably something is wrong there.");
+				jQuery.sap.log.error("Annotation Helper: Spaces are not allowed in ID parts. Please check the annotations, probably something is wrong there.");
 			}
 			return sId.replace(/@/g, "").replace(/\//g, "::").replace(/#/g, "::");
 		},
@@ -2110,7 +2097,7 @@
 				return sPathConcat;
 			} else {
 				// In case of a string or unknown property
-				Log.error("Annotation Helper: Unable to create a stable ID. Please check the annotations.");
+				jQuery.sap.log.error("Annotation Helper: Unable to create a stable ID. Please check the annotations.");
 			}
 		},
 		getStableIdPartFromDataPoint: function (oDataPoint) {
@@ -2129,7 +2116,7 @@
 				return sPathConcat;
 			} else {
 				// In case of a string or unknown property
-				Log.error("Annotation Helper: Unable to create stable ID derived from annotations.");
+				jQuery.sap.log.error("Annotation Helper: Unable to create stable ID derived from annotations.");
 			}
 		},
 		getStableIdPartFromFacet: function (oFacet) {
@@ -2143,7 +2130,7 @@
 				} else {
 					// If the ID is missing a random value is returned because a duplicate ID error will be thrown as soon as there is
 					// more than one form on the UI.
-					Log.error("Annotation Helper: Unable to create a stable ID. You have to set an ID at all collection facets.");
+					jQuery.sap.log.error("Annotation Helper: Unable to create a stable ID. You have to set an ID at all collection facets.");
 					return Math.floor((Math.random() * 99999) + 1).toString();
 				}
 			} else if (oFacet.RecordType && oFacet.RecordType === "com.sap.vocabularies.UI.v1.ReferenceFacet") {
@@ -2153,7 +2140,7 @@
 					return sHeaderFacetPrefix + sap.suite.ui.generic.template.js.AnnotationHelper.replaceSpecialCharsInId(oFacet.Target.AnnotationPath);
 				}
 			} else {
-				Log.error("Annotation Helper: Unable to create a stable ID. Please check the facet annotations.");
+				jQuery.sap.log.error("Annotation Helper: Unable to create a stable ID. Please check the facet annotations.");
 				return Math.floor((Math.random() * 99999) + 1).toString();
 			}
 		},
@@ -2467,7 +2454,7 @@
 				var sPaddedIndex = sPadding + ((parseInt(oValue.getPath().substring(oValue.getPath().lastIndexOf("/") + 1), 10) + 1 ) * 10).toString();
 				return sPaddedIndex.substr(sPaddedIndex.length - sPadding.length);
 			} else {
-				Log.error("Annotation Helper: Unable to get index.");
+				jQuery.sap.log.error("Annotation Helper: Unable to get index.");
 			}
 		},
 		// The result is either Navigation or Inactive or a binding string which resolve to one of these two possibilities
@@ -2544,7 +2531,7 @@
 										}
 									} else {
 										result = false; // if the creatable-path is not valid, disable creation; assuming error in the annotations
-										Log.warning("Creatable-Path is not valid. Creation for " + oRelatedEntitySet.name + " is disabled");
+										jQuery.sap.log.warning("Creatable-Path is not valid. Creation for " + oRelatedEntitySet.name + " is disabled");
 									}
 								} else {
 									result = false; //there is no IF condition therefore the creation for the related entity is disabled
@@ -2577,7 +2564,7 @@
 					|| (mRestrictions.Deletable && mRestrictions.Deletable.Path && sap.suite.ui.generic.template.js.AnnotationHelper._isPropertyPathBoolean(oModel, sEntityType, mRestrictions.Deletable.Path)));
 
 			if (!result) {
-				Log.error("Service Broken: Delete Restrictions annotations are invalid. ");
+				jQuery.sap.log.error("Service Broken: Delete Restrictions annotations are invalid. ");
 			}
 			return result;
 		},
@@ -2589,7 +2576,7 @@
 				|| (mRestrictions.Updatable && mRestrictions.Updatable.Path && sap.suite.ui.generic.template.js.AnnotationHelper._isPropertyPathBoolean(oModel, sEntityType, mRestrictions.Updatable.Path)));
 
 			if (!result) {
-				Log.error("Service Broken: Delete Restrictions annotations are invalid. ");
+				jQuery.sap.log.error("Service Broken: Delete Restrictions annotations are invalid. ");
 			}
 			return result;
 		},
@@ -2747,7 +2734,6 @@
 			};
 			fnGetLineItemMapDetails(aFacets, sParentLabelString);
 			var sFacetI18nString = mLineItemLabelMap.get(oFacet.Target.AnnotationPath);
-			sFacetI18nString = sFacetI18nString.replace("'", "\\'").replace('"','\\"');
 			if (sFacetI18nString.indexOf(">") > -1 ) {
 				sFacetI18nString = "@i18n>" + sFacetI18nString.split(">")[1].split("}")[0];
 			} else {
@@ -2755,7 +2741,6 @@
 			}
 			if (oHeader && oHeader.TypeNamePlural && oHeader.TypeNamePlural.String) {
 				var sTableTitleI18n = oHeader.TypeNamePlural.String;
-				sTableTitleI18n = sTableTitleI18n.replace("'","\\'").replace('"','\\"');
 				if (sTableTitleI18n === '') {
 					return "";
 				} else if ( sTableTitleI18n.indexOf(">") > -1 ){
@@ -3172,7 +3157,7 @@
 					}
 				}
 			} else { // Cannot do anything
-				Log.warning("Value property is mandatory, the default (empty string) will be returned");
+				jQuery.sap.log.warning("Value property is mandatory, the default (empty string) will be returned");
 			}
 
 			return sDisplayValue;
@@ -3205,11 +3190,11 @@
 					var sCriticality = "'" + oCriticalityProperty.EnumMember + "'";
 					sFormatCriticalityExpression = jQuery.sap.formatMessage(sExpressionTemplate, sCriticality);
 				} else {
-					Log.warning("Case not supported, returning the default sap.ui.core.ValueState.None");
+					jQuery.sap.log.warning("Case not supported, returning the default sap.ui.core.ValueState.None");
 				}
 			} else {
 				// Any other cases are not valid, the default value of 'None' will be returned
-				Log.warning("Case not supported, returning the default sap.ui.core.ValueState.None");
+				jQuery.sap.log.warning("Case not supported, returning the default sap.ui.core.ValueState.None");
 			}
 
 			return sFormatCriticalityExpression;
@@ -3231,7 +3216,7 @@
 			try {
 				sEntitySetName = refEntitySet.name || entitySet.name;
 			} catch (oError) {
-				Log.warning("At least one of the input parameters is undefined. Returning default value for entity set name.");
+				jQuery.sap.log.warning("At least one of the input parameters is undefined. Returning default value for entity set name.");
 			}
 			return sEntitySetName;
 		},
@@ -3319,7 +3304,7 @@
 					return sTargetString;
 				}
 			} else { // Cannot do anything
-				Log.warning("No entity type provided");
+				jQuery.sap.log.warning("No entity type provided");
 			}
 		},
 
@@ -3517,11 +3502,7 @@
 			}
 			return false;
 		},
-		
-		setRowHighlight: function(entityType) {
-			return "{parts: [{path: 'IsActiveEntity'}, {path: 'HasActiveEntity'}, {path: '" + entityType["com.sap.vocabularies.UI.v1.LineItem@com.sap.vocabularies.UI.v1.Criticality"].Path + "'}], formatter: 'sap.suite.ui.generic.template.js.AnnotationHelper.setInfoHighlight'}";
-		},
-		
+
 		setInfoHighlight: function(isActiveEntity, hasActiveEntity) {
 			var oModel = this.getModel();
 			var oMetaModel = oModel.getMetaModel();
@@ -3622,7 +3603,7 @@
 		},
 
 		getDataFieldValue: function(oInterface, oDataFieldValue) {
-			if (oDataFieldValue && !oDataFieldValue.Path && !oDataFieldValue.Apply && !oDataFieldValue.String) {
+			if (oDataFieldValue && !oDataFieldValue.Path) {
 				return "";
 			} else {
 				return sap.ui.model.odata.AnnotationHelper.format(oInterface, oDataFieldValue);
